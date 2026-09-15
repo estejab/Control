@@ -1,1 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chemical Process Control Simulation - TTU Style</title>
+  <!-- Chart.js for plotting -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --ttu-purple: #4F2984;
+      --ttu-gold: #FFD100;
+      --ttu-dark-purple: #371B5C;
+      --ttu-gray: #F4F4F6;
+      --danger-red: #D9534F;
+      --success-green: #5CB85C;
+    }
 
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: var(--ttu-gray);
+      color: #333;
+      padding: 15px;
+    }
+
+    header {
+      background-color: var(--ttu-purple);
+      color: white;
+      padding: 15px 20px;
+      border-radius: 8px;
+      border-bottom: 5px solid var(--ttu-gold);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--ttu-gold);
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 850px) {
+      .grid-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: white;
+      padding: 18px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      border: 1px solid #E0E0E0;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      color: var(--ttu-purple);
+      margin-bottom: 12px;
+      border-bottom: 2px solid var(--ttu-gold);
+      padding-bottom: 5px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #444;
+    }
+
+    .form-group select,
+    .form-group input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #CCC;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .form-group select:focus,
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--ttu-purple);
+    }
+
+    .slider-val {
+      float: right;
+      font-weight: bold;
+      color: var(--ttu-purple);
+    }
+
+    /* Diagram Styles */
+    .process-diagram {
+      width: 100%;
+      height: 120px;
+      background: #FAFAFA;
+      border: 1px dashed var(--ttu-purple);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      position: relative;
+      padding: 10px;
+    }
+
+    .diagram-node {
+      background: var(--ttu-purple);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      text-align: center;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+
+    .diagram-arrow {
+      font-size: 1.2rem;
+      color: var(--ttu-purple);
+      font-weight: bold;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 0.85rem;
+      color: white;
+      text-align: center;
+      margin-top: 5px;
+    }
+
+    .status-stable {
+      background-color: var(--success-green);
+    }
+
+    .status-unstable {
+      background-color: var(--danger-red);
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.7; }
+    }
+
+    .chart-container {
+      position: relative;
+      height: 380px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>Process Dynamics & Control Simulator</h1>
+      <p>Based on Process Control Modeling by W. Bequette</p>
+    </div>
+    <div style="text-align: right;">
+      <span style="background: var(--ttu-gold); color: var(--ttu-purple); font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">TENNESSEE TECH</span>
+    </div>
+  </header>
+
+  <div class="grid-container">
+    <!-- Controls Sidebar -->
+    <div class="sidebar">
+      <div class="card">
+        <h2>1. System Dynamics</h2>
+        
+        <div class="form-group">
+          <label for="systemOrder">Process Order</label>
+          <select id="systemOrder" onchange="updateControls()">
+            <option value="1">1st Order (Single Tank / Thermal)</option>
+            <option value="2">2nd Order (Two Tanks in Series / Underdamped)</option>
+            <option value="3">3rd Order (3-Tank Cascade System)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="tau">Process Time Constant (τ): <span id="tauVal" class="slider-val">2.0</span></label>
+          <input type="range" id="tau" min="0.5" max="10" step="0.5" value="2.0" oninput="runSimulation()">
+        </div>
+
+        <div class="form-group" id="zetaGroup" style="display: none;">
+          <label for="zeta">Damping Coefficient (ζ): <span id="zetaVal" class="slider-val">0.5</span></label>
+          <input type="range" id="zeta" min="-0.2" max="2.0" step="0.05" value="0.5" oninput="runSimulation()">
+        </div>
+
+        <div class="form-group">
+          <label for="deadTime">Dead Time / Transport Delay (θ): <span id="dtVal" class="slider-val">0.0</span></label>
+          <input type="range" id="deadTime" min="0" max="5" step="0.5" value="0" oninput="runSimulation()">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2. PID Controller Tuning</h2>
+        
+        <div class="form-group">
+          <label for="controllerType">Controller Mode</label>
+          <select id="controllerType" onchange="updateControls()">
+            <option value="P">Proportional (P)</option>
+            <option value="PI">Proportional-Integral (PI)</option>
+            <option value="PID" selected>Proportional-Integral-Derivative (PID)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="kp">Controller Gain (Kp): <span id="kpVal" class="slider-val">2.0</span></label>
+          <input type="range" id="kp" min="0" max="20" step="0.1" value="2.0" oninput="runSimulation()">
+        </div>
+
+        <div class="form-group" id="kiGroup">
+          <label for="ki">Integral Gain (Ki): <span id="kiVal" class="slider-val">0.5</span></label>
+          <input type="range" id="ki" min="0" max="5" step="0.05" value="0.5" oninput="runSimulation()">
+        </div>
+
+        <div class="form-group" id="kdGroup">
+          <label for="kd">Derivative Gain (Kd): <span id="kdVal" class="slider-val">0.2</span></label>
+          <input type="range" id="kd" min="0" max="5" step="0.05" value="0.2" oninput="runSimulation()">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>3. Provoking Input (Disturbance/SetPoint)</h2>
+        <div class="form-group">
+          <label for="stepTime">Step Change Time: <span id="stepTimeVal" class="slider-val">2.0</span> s</label>
+          <input type="range" id="stepTime" min="0" max="10" step="1" value="2.0" oninput="runSimulation()">
+        </div>
+        <div class="form-group">
+          <label for="stepMag">Step Magnitude: <span id="stepMagVal" class="slider-val">1.0</span></label>
+          <input type="range" id="stepMag" min="0.5" max="5" step="0.5" value="1.0" oninput="runSimulation()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Output / Plots -->
+    <div class="main-content">
+      <div class="card">
+        <h2>Process Schematic & Stability Indicator</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div class="process-diagram" id="diagram">
+            <div class="diagram-node">Setpoint<br>(Input Signal)</div>
+            <div class="diagram-arrow">➔</div>
+            <div class="diagram-node" style="background: var(--ttu-gold); color: black;">PID Controller</div>
+            <div class="diagram-arrow">➔</div>
+            <div class="diagram-node" id="processBox">Process Transfer Function</div>
+            <div class="diagram-arrow">➔</div>
+            <div class="diagram-node">Output y(t)</div>
+          </div>
+        </div>
+        <div style="margin-top: 15px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <strong>Stability Assessment: </strong>
+            <span id="stabilityStatus" class="status-badge status-stable">STABLE SYSTEM</span>
+          </div>
+          <div id="stabilityDesc" style="font-size: 0.85rem; color: #555;">
+            Poles located in the left-half s-plane.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Dynamic Response Plot</h2>
+        <div class="chart-container">
+          <canvas id="responseChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let chart;
+
+    function initChart() {
+      const ctx = document.getElementById('responseChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'SetPoint / Input Provocation r(t)',
+              borderColor: '#FFD100',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              data: [],
+              fill: false,
+              pointRadius: 0
+            },
+            {
+              label: 'Process Response y(t)',
+              borderColor: '#4F2984',
+              borderWidth: 2.5,
+              data: [],
+              fill: false,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: { display: true, text: 'Time (s)', color: '#4F2984', font: { weight: 'bold' } }
+            },
+            y: {
+              title: { display: true, text: 'System Response', color: '#4F2984', font: { weight: 'bold' } },
+              suggestedMin: -0.5,
+              suggestedMax: 2.0
+            }
+          },
+          plugins: {
+            legend: { position: 'top' }
+          }
+        }
+      });
+    }
+
+    function updateControls() {
+      const order = document.getElementById('systemOrder').value;
+      const ctrl = document.getElementById('controllerType').value;
+
+      document.getElementById('zetaGroup').style.display = (order === '2') ? 'block' : 'none';
+      document.getElementById('kiGroup').style.display = (ctrl === 'PI' || ctrl === 'PID') ? 'block' : 'none';
+      document.getElementById('kdGroup').style.display = (ctrl === 'PID') ? 'block' : 'none';
+
+      runSimulation();
+    }
+
+    function runSimulation() {
+      // Read Inputs
+      const order = parseInt(document.getElementById('systemOrder').value);
+      const tau = parseFloat(document.getElementById('tau').value);
+      const zeta = parseFloat(document.getElementById('zeta').value);
+      const deadTime = parseFloat(document.getElementById('deadTime').value);
+
+      const ctrlType = document.getElementById('controllerType').value;
+      const Kp = parseFloat(document.getElementById('kp').value);
+      const Ki = (ctrlType === 'PI' || ctrlType === 'PID') ? parseFloat(document.getElementById('ki').value) : 0;
+      const Kd = (ctrlType === 'PID') ? parseFloat(document.getElementById('kd').value) : 0;
+
+      const stepTime = parseFloat(document.getElementById('stepTime').value);
+      const stepMag = parseFloat(document.getElementById('stepMag').value);
+
+      // Update slider labels
+      document.getElementById('tauVal').innerText = tau;
+      document.getElementById('zetaVal').innerText = zeta;
+      document.getElementById('dtVal').innerText = deadTime;
+      document.getElementById('kpVal').innerText = Kp;
+      document.getElementById('kiVal').innerText = Ki;
+      document.getElementById('kdVal').innerText = Kd;
+      document.getElementById('stepTimeVal').innerText = stepTime;
+      document.getElementById('stepMagVal').innerText = stepMag;
+
+      // Numerical Simulation Settings
+      const dt = 0.05;
+      const totalTime = 40;
+      const steps = Math.floor(totalTime / dt);
+
+      let times = [];
+      let setpoints = [];
+      let outputs = [];
+
+      // State variables for numerical integration (Euler's method)
+      let y = 0, yd = 0, ydd = 0; // process outputs & derivatives
+      let e_integral = 0;
+      let e_prev = 0;
+      let u_history = new Array(Math.ceil(deadTime / dt) + 1).fill(0);
+
+      let isUnstable = false;
+
+      for (let i = 0; i < steps; i++) {
+        let t = i * dt;
+        times.push(t.toFixed(1));
+
+        // Provoking step input
+        let r = (t >= stepTime) ? stepMag : 0;
+        setpoints.push(r);
+
+        // Calculate Controller Output (u)
+        let error = r - y;
+        e_integral += error * dt;
+        let e_derivative = (error - e_prev) / dt;
+        e_prev = error;
+
+        let u = (Kp * error) + (Ki * e_integral) + (Kd * e_derivative);
+
+        // Handle Transport Delay (Dead time)
+        u_history.push(u);
+        let u_delayed = u_history.shift();
+
+        // Process Ordinary Differential Equations (ODEs)
+        if (order === 1) {
+          // dy/dt = (u_delayed - y) / tau
+          let dy = (u_delayed - y) / tau;
+          y += dy * dt;
+        } else if (order === 2) {
+          // d2y/dt2 + (2*zeta/tau)*dy/dt + (1/tau^2)*y = u_delayed / tau^2
+          let ydd = (u_delayed - 2 * zeta * tau * yd - y) / (tau * tau);
+          yd += ydd * dt;
+          y += yd * dt;
+        } else if (order === 3) {
+          // Triple first-order cascade: (tau*s + 1)^3
+          let y3dd = (u_delayed - 3*tau*ydd - 3*tau*tau*yd - y) / Math.pow(tau, 3);
+          ydd += y3dd * dt;
+          yd += ydd * dt;
+          y += yd * dt;
+        }
+
+        outputs.push(y);
+
+        // Stability Check (Detect runaway values or unbounded oscillations)
+        if (Math.abs(y) > 100 || isNaN(y)) {
+          isUnstable = true;
+        }
+      }
+
+      // Display Stability Output
+      const badge = document.getElementById('stabilityStatus');
+      const desc = document.getElementById('stabilityDesc');
+
+      if (isUnstable) {
+        badge.className = 'status-badge status-unstable';
+        badge.innerText = 'UNSTABLE SYSTEM';
+        desc.innerText = 'Process response is growing unbounded (gain or integration constant too high).';
+      } else {
+        badge.className = 'status-badge status-stable';
+        badge.innerText = 'STABLE SYSTEM';
+        desc.innerText = 'System settles into a bounded equilibrium.';
+      }
+
+      // Update Chart
+      chart.data.labels = times;
+      chart.data.datasets[0].data = setpoints;
+      chart.data.datasets[1].data = outputs;
+      chart.update();
+    }
+
+    window.onload = function() {
+      initChart();
+      updateControls();
+    };
+  </script>
+</body>
+</html>
